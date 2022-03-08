@@ -11,21 +11,20 @@ import "hardhat/console.sol";
 contract Marketplace is ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
 
-    // TODO: Move the initialazation for this to be supplied in the constructor (value below is for Matic)
     address immutable ACCEPTED_CURRENCY_ADDRESS;
     IERC20 immutable currencyToken;
+
+    // The address of the marketplace bank where cut of sales will be sent to
+    address internal marketPlaceBankAddress;
+
+    // The cut in percantage the marketplace takes from every initial sale of an item
+    uint8 internal marketplaceCut;
 
     // Counter for all marketplace items ids
     Counters.Counter internal _itemIds;
 
     // Mark that the marketplace is willing to accept just NFTs from a specific contract
     address internal allowedNftContract;
-
-    // The cut in percantage the marketplace takes from every initial sale of an item
-    uint8 internal marketplaceCut;
-
-    // The address of the marketplace bank where cut of sales will be sent to
-    address internal marketPlaceBankAddress;
 
     // Allows to check if a specific nft is already listed on the marketplace based on its contract address and token id
     mapping(address => mapping(uint256 => bool)) internal _nftsOnMarketplace;
@@ -111,12 +110,31 @@ contract Marketplace is ReentrancyGuard, Ownable {
         _;
     }
 
-    constructor(address approvedCurrencyAddres) {
+    constructor(address approvedCurrencyAddres, address bankAddress) {
         ACCEPTED_CURRENCY_ADDRESS = approvedCurrencyAddres;
         currencyToken = IERC20(approvedCurrencyAddres);
+        marketPlaceBankAddress = bankAddress;
     }
 
     receive() external payable {}
+
+    /*
+    Set the address of the marketplace bank. Marketplace cut of sales will be sent to this address.
+    */
+    function setMarketplaceBank(address bankAddress) public onlyOwner {
+        require(
+            bankAddress != address(0),
+            "Bank address can't be address zero"
+        );
+        marketPlaceBankAddress = bankAddress;
+    }
+
+    /*
+    Returns the address of the marketplace bank
+    */
+    function getMarketplaceBankAddress() public view returns (address) {
+        return marketPlaceBankAddress;
+    }
 
     // This function set the marketplace to accept only NFTs of a specified contract. Only owners can call this function.
     function setMarketplaceToAcceptOnlyContract(address contractToAccept)
@@ -141,18 +159,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
         );
 
         marketplaceCut = cut;
-    }
-
-    /*
-        Set the address of the marketplace bank
-    */
-    function setMarketplaceBankAddress(address newBankAddress)
-        public
-        onlyOwner
-    {
-        require(newBankAddress != address(0), "Bank address can't be 0");
-
-        marketPlaceBankAddress = newBankAddress;
     }
 
     /*
@@ -368,7 +374,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
                 if (isTransferSuccessful) {
                     // Transfer the platform cut of the sale
                     if (platformCut > 0) {
-                        payable(address(this)).transfer(platformCut);
+                        currencyToken.transferFrom(
+                            payable(currentBid.bidder),
+                            marketPlaceBankAddress,
+                            platformCut
+                        );
                     }
 
                     // Transfer the NFT to the bidder
@@ -461,7 +471,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         // Transfer the platform cut to the marketplace contract
         if (platformCut > 0) {
-            payable(address(this)).transfer(platformCut);
+            payable(marketPlaceBankAddress).transfer(platformCut);
         }
     }
 }

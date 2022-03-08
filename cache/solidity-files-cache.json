@@ -1264,8 +1264,8 @@
       ]
     },
     "/Users/shahar/Projects/nfts_marketplace/contracts/Marketplace.sol": {
-      "lastModificationDate": 1646562039059,
-      "contentHash": "2b124a4ed91d2b4e5b6e97c84431d4aa",
+      "lastModificationDate": 1646739483511,
+      "contentHash": "3121e8d4e019f87703d3c316e165c2f4",
       "sourceName": "contracts/Marketplace.sol",
       "solcConfig": {
         "version": "0.8.9",

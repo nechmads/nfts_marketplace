@@ -5,6 +5,7 @@ describe("Marketplace contract", async function () {
   let marketplace;
   let marketplaceNFT;
   let marketplaceOwner;
+  let marketplaceBank;
   let creator;
   let buyer;
   let users;
@@ -12,13 +13,14 @@ describe("Marketplace contract", async function () {
 
   beforeEach(async function () {
     [marketplaceOwner, creator, buyer, ...users] = await ethers.getSigners();
+    marketplaceBank = marketplaceOwner;
 
     const demoToken = await ethers.getContractFactory("DemoERC20");
     erc20DemoToken = await demoToken.deploy();
 
     // deploy the marketplace token
     const marketplaceToken = await ethers.getContractFactory("Marketplace");
-    marketplace = await marketplaceToken.deploy(erc20DemoToken.address);
+    marketplace = await marketplaceToken.deploy(erc20DemoToken.address, marketplaceBank.address);
 
     // deploy the MarketplaceNFT Token
     const marketplaceNftToken = await ethers.getContractFactory("MarketplaceNFT");
@@ -29,6 +31,25 @@ describe("Marketplace contract", async function () {
     const nftTwo = await marketplaceNFT.connect(creator).createToken("uriTwo");
     const nftThree = await marketplaceNFT.connect(creator).createToken("uriThree");
     nfts = [nftOne, nftTwo, nftThree];
+  });
+
+  describe("Setting matketplace features and configuration", function () {
+    it("Should not allow to set the matkerplace bank by anyone who is not the owner of the marketplace", async function () {
+      await expect(marketplace.connect(buyer).setMarketplaceBank(buyer.address)).to.be.revertedWith(
+        "Ownable: caller is not the owner"
+      );
+    });
+
+    it("Should allow the owner of the marketplace to set the bank address", async function () {
+      await marketplace.setMarketplaceBank(buyer.address);
+      expect(await marketplace.getMarketplaceBankAddress()).to.equal(buyer.address);
+    });
+
+    it("Should not allow to set the marketplace bank to address zero", async function () {
+      await expect(marketplace.setMarketplaceBank(ethers.constants.AddressZero)).to.be.revertedWith(
+        "Bank address can't be address zero"
+      );
+    });
   });
 
   describe("Marketplace - listing items", async function () {
@@ -48,12 +69,12 @@ describe("Marketplace contract", async function () {
       expect(listedItem.minPrice).to.equal(10);
       expect(listedItem.buyNowPrice).to.equal(20);
     });
-  });
 
-  it("Should not allow to list an item that the user doesn't own or have permission to trade", async function () {
-    await expect(
-      marketplace.connect(buyer).listItem(marketplaceNFT.address, 1, 10, 20)
-    ).to.be.revertedWith("You must be the owner or approved of the asset to be able to list it");
+    it("Should not allow to list an item that the user doesn't own or have permission to trade", async function () {
+      await expect(
+        marketplace.connect(buyer).listItem(marketplaceNFT.address, 1, 10, 20)
+      ).to.be.revertedWith("You must be the owner or approved of the asset to be able to list it");
+    });
   });
 
   describe("Marketplace - Buy now", async function () {
@@ -121,7 +142,7 @@ describe("Marketplace contract", async function () {
 
       await expect(() =>
         marketplace.connect(buyer).buyItem(listedItem.itemId, { value: 20 })
-      ).to.changeBalance(marketplace, 3);
+      ).to.changeEtherBalance(marketplaceBank, 3);
     });
 
     it("Should give the creator thr right cut of a sale", async function () {
@@ -205,6 +226,19 @@ describe("Marketplace contract", async function () {
 
       const creatorBalance = await erc20DemoToken.balanceOf(creator.address);
       expect(creatorBalance).to.equal(15);
+    });
+
+    it("Should send the right cut of an accepted bid to the marketplace bank", async function () {
+      await marketplace.setMarketplaceCut(20);
+
+      await erc20DemoToken.connect(buyer).approve(marketplace.address, 15);
+
+      await marketplace.connect(buyer).submitBid(listedItem.itemId, 15);
+
+      await marketplace.connect(creator).acceptBid(listedItem.itemId, buyer.address, 15);
+
+      const bankBalance = await erc20DemoToken.balanceOf(marketplaceBank.address);
+      expect(bankBalance).to.equal(3);
     });
 
     it("Should change ownership of the asset after succesfully acecepting a bid", async function () {
