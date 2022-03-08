@@ -26,9 +26,6 @@ contract Marketplace is ReentrancyGuard, Ownable {
     // Mark that the marketplace is willing to accept just NFTs from a specific contract
     address internal allowedNftContract;
 
-    // Allows to check if a specific nft is already listed on the marketplace based on its contract address and token id
-    mapping(address => mapping(uint256 => bool)) internal _nftsOnMarketplace;
-
     // Represent any asset in the marketplace
     struct Asset {
         address owner;
@@ -53,6 +50,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
     // Get any item that is listed on the marketplace by its marketplace item id
     mapping(uint256 => MarketplaceItem) public idToMarketplaceItem;
+
+    // Allows to check if a specific nft is already listed on the marketplace based on its contract address and token id
+    mapping(address => mapping(uint256 => bool)) internal _nftsOnMarketplace;
 
     // Non time based bids. itemId => list of bids
     mapping(uint256 => Bid[]) public openBids;
@@ -167,6 +167,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function calculateMarketplaceCut(uint256 salePrice, uint8 cut)
         internal
         pure
+        virtual
         returns (uint256)
     {
         return (salePrice * cut) / 100;
@@ -180,7 +181,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 tokenId,
         uint256 minPrice,
         uint256 buyNowPrice
-    ) public nonReentrant returns (uint256 newItemId) {
+    ) public virtual nonReentrant returns (uint256 newItemId) {
         // Check to see if the NFT is already listed on the marketplace
         require(
             _nftsOnMarketplace[assetContract][tokenId] == false,
@@ -237,6 +238,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function buyItem(uint256 itemId)
         public
         payable
+        virtual
         nonReentrant
         itemExist(itemId)
     {
@@ -280,6 +282,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     */
     function submitBid(uint256 itemId, uint256 bid)
         public
+        virtual
         itemOnSale(itemId)
         returns (bool)
     {
@@ -310,7 +313,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     /*
     Cancel a bid for an item
     */
-    function cancelBid(uint256 itemId, uint256 price) public {
+    function cancelBid(uint256 itemId, uint256 price) public virtual {
         Bid[] storage allBids = openBids[itemId];
 
         for (uint256 index; index < allBids.length; index++) {
@@ -331,6 +334,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function getAllOpenBidsForItem(uint256 itemId)
         public
         view
+        virtual
         returns (Bid[] memory allOpenBids)
     {
         Bid[] storage itemBids = openBids[itemId];
@@ -348,7 +352,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 itemId,
         address bidder,
         uint256 price
-    ) public onlyItemOwner(itemId) {
+    ) public virtual onlyItemOwner(itemId) {
         Bid[] storage allBids = openBids[itemId];
 
         for (uint256 index; index < allBids.length; index++) {
@@ -407,7 +411,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 tokenId,
         uint256 minPrice,
         uint256 buyNowPrice
-    ) private returns (uint256 newItemId) {
+    ) internal virtual returns (uint256 newItemId) {
         _itemIds.increment();
         newItemId = _itemIds.current();
 
@@ -450,7 +454,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     function doesHaveRequiredBalanceAndAllowance(
         address addressToCheck,
         uint256 amount
-    ) internal view returns (bool) {
+    ) internal view virtual returns (bool) {
         return (currencyToken.balanceOf(addressToCheck) >= amount &&
             currencyToken.allowance(addressToCheck, address(this)) >= amount);
     }
