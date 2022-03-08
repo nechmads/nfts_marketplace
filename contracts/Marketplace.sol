@@ -15,16 +15,16 @@ contract Marketplace is ReentrancyGuard, Ownable {
     IERC20 immutable currencyToken;
 
     // The address of the marketplace bank where cut of sales will be sent to
-    address internal marketPlaceBankAddress;
+    address internal _marketPlaceBankAddress;
 
     // The cut in percantage the marketplace takes from every initial sale of an item
-    uint8 internal marketplaceCut;
+    uint8 internal _marketplaceCut;
 
     // Counter for all marketplace items ids
     Counters.Counter internal _itemIds;
 
     // Mark that the marketplace is willing to accept just NFTs from a specific contract
-    address internal allowedNftContract;
+    address internal _allowedNftContract;
 
     // Represent any asset in the marketplace
     struct Asset {
@@ -113,7 +113,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     constructor(address approvedCurrencyAddres, address bankAddress) {
         ACCEPTED_CURRENCY_ADDRESS = approvedCurrencyAddres;
         currencyToken = IERC20(approvedCurrencyAddres);
-        marketPlaceBankAddress = bankAddress;
+        _marketPlaceBankAddress = bankAddress;
     }
 
     receive() external payable {}
@@ -126,14 +126,14 @@ contract Marketplace is ReentrancyGuard, Ownable {
             bankAddress != address(0),
             "Bank address can't be address zero"
         );
-        marketPlaceBankAddress = bankAddress;
+        _marketPlaceBankAddress = bankAddress;
     }
 
     /*
     Returns the address of the marketplace bank
     */
     function getMarketplaceBankAddress() public view returns (address) {
-        return marketPlaceBankAddress;
+        return _marketPlaceBankAddress;
     }
 
     // This function set the marketplace to accept only NFTs of a specified contract. Only owners can call this function.
@@ -141,12 +141,12 @@ contract Marketplace is ReentrancyGuard, Ownable {
         public
         onlyOwner
     {
-        allowedNftContract = contractToAccept;
+        _allowedNftContract = contractToAccept;
     }
 
     // This function set the marketplace to accept NFTs of all contracts. Only owners can call this function.
     function setMarketplaceToAcceptAllContracts() public onlyOwner {
-        allowedNftContract = address(0);
+        _allowedNftContract = address(0);
     }
 
     /*
@@ -158,13 +158,13 @@ contract Marketplace is ReentrancyGuard, Ownable {
             "Cut percantage must be between 0 to 100"
         );
 
-        marketplaceCut = cut;
+        _marketplaceCut = cut;
     }
 
     /*
     Calculate what is the amount of money the marketpalce takes from a sale
     */
-    function calculateMarketplaceCut(uint256 salePrice, uint8 cut)
+    function _calculateMarketplaceCut(uint256 salePrice, uint8 cut)
         internal
         pure
         virtual
@@ -190,7 +190,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         // Check to see if the marketplace is accepting the NFT contract
         require(
-            isAcceptinfNftsOfContract(assetContract),
+            _isAcceptingfNftsOfContract(assetContract),
             "You can't list NFTs of this contract at the moment"
         );
 
@@ -205,7 +205,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         // TODO: If we want to deal with NFTs not minted by us, we need to ask for approval permissions on the token
 
         // Add the asset to the marketplace
-        newItemId = addAssetToMarketplace(
+        newItemId = _addAssetToMarketplace(
             assetContract,
             tokenId,
             minPrice,
@@ -298,7 +298,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         // Check to see that the bidder holds enough money and gave us (the contract) permission to withdraw it if the bid will be accepted.
         require(
-            doesHaveRequiredBalanceAndAllowance(msg.sender, bid),
+            _doesHaveRequiredBalanceAndAllowance(msg.sender, bid),
             "You don't have enough money or didn't give us permissions for that amount"
         );
 
@@ -361,9 +361,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
                 MarketplaceItem storage itemSold = idToMarketplaceItem[itemId];
 
                 // Calculate how much the marketplace takes and how much we need to transfer to the seller
-                uint256 platformCut = calculateMarketplaceCut(
+                uint256 platformCut = _calculateMarketplaceCut(
                     currentBid.price,
-                    marketplaceCut
+                    _marketplaceCut
                 );
 
                 uint256 sellerCut = price - platformCut;
@@ -380,7 +380,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
                     if (platformCut > 0) {
                         currencyToken.transferFrom(
                             payable(currentBid.bidder),
-                            marketPlaceBankAddress,
+                            _marketPlaceBankAddress,
                             platformCut
                         );
                     }
@@ -406,7 +406,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     /*
     Private function to add an asset to the marketplace
     */
-    function addAssetToMarketplace(
+    function _addAssetToMarketplace(
         address assetContract,
         uint256 tokenId,
         uint256 minPrice,
@@ -439,19 +439,19 @@ contract Marketplace is ReentrancyGuard, Ownable {
     /*
     Check to see if the marketplace accepts nfts of a specified contract
     */
-    function isAcceptinfNftsOfContract(address nftContract)
+    function _isAcceptingfNftsOfContract(address nftContract)
         internal
         view
         returns (bool)
     {
-        return (allowedNftContract == address(0) ||
-            allowedNftContract == nftContract);
+        return (_allowedNftContract == address(0) ||
+            _allowedNftContract == nftContract);
     }
 
     /*
     Check if a certain address has the requried balance and gave us the approval of using it
     */
-    function doesHaveRequiredBalanceAndAllowance(
+    function _doesHaveRequiredBalanceAndAllowance(
         address addressToCheck,
         uint256 amount
     ) internal view virtual returns (bool) {
@@ -464,7 +464,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     */
     function _handlePayments(address creator, uint256 price) internal virtual {
         // Calculate how much the marketplace takes and how much we need to transfer to the seller
-        uint256 platformCut = calculateMarketplaceCut(price, marketplaceCut);
+        uint256 platformCut = _calculateMarketplaceCut(price, _marketplaceCut);
 
         uint256 sellerCut = price - platformCut;
 
@@ -475,7 +475,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
 
         // Transfer the platform cut to the marketplace contract
         if (platformCut > 0) {
-            payable(marketPlaceBankAddress).transfer(platformCut);
+            payable(_marketPlaceBankAddress).transfer(platformCut);
         }
     }
 }
